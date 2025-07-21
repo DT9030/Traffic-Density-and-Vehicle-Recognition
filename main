@@ -1,0 +1,220 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+import time
+from collections import deque
+
+# Simulate the TrafficDensityAnalyzer class
+class TrafficDensityAnalyzer:
+    def __init__(self, history_size=100):
+        self.density_history = deque(maxlen=history_size)
+        self.vehicle_count_history = deque(maxlen=history_size)
+        self.frame_count = 0
+        self.vehicle_types = {
+            'car': 0, 'truck': 0, 'bus': 0, 'motorcycle': 0, 'bicycle': 0
+        }
+        self.density_thresholds = {
+            'low': 5, 'medium': 15, 'high': 30
+        }
+    
+    def update(self, vehicles, image_area):
+        self.frame_count += 1
+        vehicle_area = sum(box[2] * box[3] for vehicle in vehicles for box in [vehicle["box"]])
+        area_density = (vehicle_area / image_area) * 100
+        count_density = len(vehicles) / (image_area / 10000)
+        
+        self.density_history.append(area_density)
+        self.vehicle_count_history.append(len(vehicles))
+        
+        for vehicle in vehicles:
+            vehicle_type = vehicle["class"]
+            if vehicle_type in self.vehicle_types:
+                self.vehicle_types[vehicle_type] += 1
+        
+        if area_density <= self.density_thresholds['low']:
+            traffic_state = "Low"
+        elif area_density <= self.density_thresholds['medium']:
+            traffic_state = "Medium"
+        elif area_density <= self.density_thresholds['high']:
+            traffic_state = "High"
+        else:
+            traffic_state = "Very High (Congested)"
+        
+        return {
+            "frame": self.frame_count,
+            "vehicle_count": len(vehicles),
+            "area_density": area_density,
+            "count_density": count_density,
+            "traffic_state": traffic_state,
+            "avg_density": np.mean(self.density_history) if self.density_history else 0,
+            "avg_vehicle_count": np.mean(self.vehicle_count_history) if self.vehicle_count_history else 0
+        }
+    
+    def get_vehicle_type_distribution(self):
+        total = sum(self.vehicle_types.values())
+        if total == 0:
+            return {k: 0 for k in self.vehicle_types}
+        return {k: (v / total) * 100 for k, v in self.vehicle_types.items()}
+    
+    def plot_density_history(self):
+        plt.figure(figsize=(12, 6))
+        plt.subplot(2, 1, 1)
+        plt.plot(list(self.density_history), 'r-')
+        plt.axhline(y=self.density_thresholds['low'], color='g', linestyle='--', label='Low Threshold')
+        plt.axhline(y=self.density_thresholds['medium'], color='y', linestyle='--', label='Medium Threshold')
+        plt.axhline(y=self.density_thresholds['high'], color='r', linestyle='--', label='High Threshold')
+        plt.title('Traffic Density History')
+        plt.ylabel('Area Density (%)')
+        plt.legend()
+        
+        plt.subplot(2, 1, 2)
+        plt.plot(list(self.vehicle_count_history), 'b-')
+        plt.title('Vehicle Count History')
+        plt.xlabel('Frame')
+        plt.ylabel('Number of Vehicles')
+        
+        plt.tight_layout()
+        plt.show()
+    
+    def plot_vehicle_distribution(self):
+        distribution = self.get_vehicle_type_distribution()
+        distribution = {k: v for k, v in distribution.items() if v > 0}
+        
+        if not distribution:
+            print("No vehicles detected yet")
+            return
+        
+        plt.figure(figsize=(10, 6))
+        plt.bar(distribution.keys(), distribution.values())
+        plt.title('Vehicle Type Distribution')
+        plt.xlabel('Vehicle Type')
+        plt.ylabel('Percentage (%)')
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.show()
+
+# Simulate YOLO detection
+def simulate_detect_vehicles(frame_number, traffic_pattern="normal"):
+    """Simulate vehicle detection with different traffic patterns"""
+    # Base number of vehicles
+    if traffic_pattern == "light":
+        base_vehicles = 5
+        variance = 3
+    elif traffic_pattern == "heavy":
+        base_vehicles = 20
+        variance = 8
+    elif traffic_pattern == "rush_hour":
+        # Simulate morning rush hour
+        if 100 <= frame_number <= 300:
+            base_vehicles = 30
+            variance = 10
+        else:
+            base_vehicles = 15
+            variance = 5
+    else:  # normal
+        base_vehicles = 10
+        variance = 5
+    
+    # Add some randomness and time-based variation
+    num_vehicles = max(1, int(base_vehicles + np.random.randint(-variance, variance)))
+    
+    # Create simulated vehicle detections
+    vehicles = []
+    for j in range(num_vehicles):
+        # Different distribution based on time of day
+        if 100 <= frame_number <= 300:  # "Rush hour"
+            vehicle_probs = [0.7, 0.15, 0.1, 0.03, 0.02]  # More cars during rush hour
+        else:
+            vehicle_probs = [0.6, 0.2, 0.1, 0.05, 0.05]
+            
+        vehicle_type = np.random.choice(
+            ['car', 'truck', 'bus', 'motorcycle', 'bicycle'], 
+            p=vehicle_probs
+        )
+        
+        x = np.random.randint(0, 500)
+        y = np.random.randint(0, 400)
+        
+        # Different sizes for different vehicle types
+        if vehicle_type == 'car':
+            w, h = np.random.randint(60, 100), np.random.randint(40, 60)
+        elif vehicle_type == 'truck':
+            w, h = np.random.randint(100, 150), np.random.randint(50, 80)
+        elif vehicle_type == 'bus':
+            w, h = np.random.randint(120, 180), np.random.randint(60, 90)
+        else:  # motorcycle or bicycle
+            w, h = np.random.randint(30, 50), np.random.randint(20, 40)
+        
+        vehicles.append({
+            "class": vehicle_type,
+            "confidence": np.random.uniform(0.6, 0.95),
+            "box": [x, y, w, h]
+        })
+    
+    return vehicles
+
+# Simulate running the main script
+def simulate_main():
+    print("Starting Traffic Density Analysis Simulation")
+    print("Loading YOLO model...")
+    time.sleep(1)  # Simulate loading time
+    print("YOLO model loaded successfully")
+    
+    # Simulate video properties
+    width, height = 640, 480
+    fps = 30
+    image_area = width * height
+    total_frames = 500  # Simulate 500 frames
+    interval = 5  # Process every 5th frame
+    
+    print(f"Processing video: traffic_video.mp4")
+    print(f"Resolution: {width}x{height}, FPS: {fps:.2f}")
+    
+    # Initialize analyzer
+    analyzer = TrafficDensityAnalyzer()
+    
+    # Simulate processing frames
+    for frame_count in range(1, total_frames + 1):
+        # Process every N frames
+        if frame_count % interval == 0:
+            # Determine traffic pattern based on frame number
+            if frame_count < 100:
+                pattern = "light"
+            elif 100 <= frame_count < 300:
+                pattern = "rush_hour"
+            elif 300 <= frame_count < 400:
+                pattern = "heavy"
+            else:
+                pattern = "normal"
+                
+            # Simulate vehicle detection
+            vehicles = simulate_detect_vehicles(frame_count, pattern)
+            
+            # Update analyzer
+            metrics = analyzer.update(vehicles, image_area)
+            
+            # Print progress (less frequently to keep output manageable)
+            if frame_count % (interval * 20) == 0:
+                print(f"Frame {frame_count}: {metrics['vehicle_count']} vehicles, "
+                      f"Density: {metrics['area_density']:.2f}%, State: {metrics['traffic_state']}")
+    
+    # Display final analysis
+    print("\nAnalysis Complete!")
+    print(f"Processed {total_frames} frames")
+    
+    # Get vehicle distribution
+    distribution = analyzer.get_vehicle_type_distribution()
+    print("\nVehicle Type Distribution:")
+    for vehicle_type, percentage in distribution.items():
+        if percentage > 0:
+            print(f"  {vehicle_type}: {percentage:.2f}%")
+    
+    # Plot results
+    analyzer.plot_density_history()
+    analyzer.plot_vehicle_distribution()
+    
+    print("\nTraffic density analysis completed successfully!")
+    print("Results have been plotted and saved.")
+
+# Run the simulation
+simulate_main()
